@@ -360,6 +360,7 @@ radius(::AbstractHyperrectangle, ::Real=Inf)
 σ(::AbstractVector{N}, ::AbstractHyperrectangle{N}) where {N<:Real}
 ρ(::AbstractVector{N}, ::AbstractHyperrectangle{N}) where {N<:Real}
 ∈(::AbstractVector{N}, ::AbstractHyperrectangle{N}) where {N<:Real}
+vertices(::AbstractHyperrectangle)
 vertices_list(::AbstractHyperrectangle{N}) where {N<:Real}
 constraints_list(::AbstractHyperrectangle{N}) where {N<:Real}
 high(::AbstractHyperrectangle{N}) where {N<:Real}
