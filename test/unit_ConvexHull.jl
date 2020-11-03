@@ -29,6 +29,9 @@ for N in [Float64, Rational{Int}, Float32]
     # isempty
     @test !isempty(ch)
 
+    # concretize
+    @test concretize(ch) == convex_hull(ch.X, ch.Y)
+
     # ===============
     # ConvexHullArray
     # ===============
@@ -100,6 +103,10 @@ for N in [Float64, Rational{Int}, Float32]
     Δbox = overapproximate(Δ, Hyperrectangle)
     @test Δ ⊆ Δbox && !(Δbox ⊆ Δ)
 
+    # concretize
+    cha2 = ConvexHullArray([b1, b2])
+    @test concretize(cha2) == convex_hull(b1, b2)
+
     # ================
     # common functions
     # ================
@@ -109,4 +116,17 @@ for N in [Float64, Rational{Int}, Float32]
     @test neutral(ConvexHull) == neutral(ConvexHullArray) == EmptySet
     @test CH(b1, e) == CH(e, b1) == b1
     @test CH(cha, e) == CH(e, cha) == cha
+
+    # vertices list
+    B1 = BallInf(zeros(N, 2), N(1))
+    B2 = Ball1(ones(N, 2), N(1))
+    Chull = ConvexHull(B1, B2)
+    CHarr = ConvexHullArray([B1, B2])
+    for X in [Chull, CHarr]
+        @test ispermutation(vertices_list(X),
+            [N[1, -1], N[-1, 1], N[-1, -1], N[1, 2], N[2, 1]])
+        @test ispermutation(vertices_list(X, apply_convex_hull=false),
+            [N[1, 1], N[1, -1], N[-1, 1], N[-1, -1],
+            N[1, 2], N[1, 0], N[2, 1], N[0, 1]])
+    end
 end

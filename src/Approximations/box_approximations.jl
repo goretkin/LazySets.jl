@@ -63,6 +63,10 @@ Alias for `box_approximation_symmetric`.
 """
 symmetric_interval_hull = box_approximation_symmetric
 
+function LazySets.concretize(sih::SymmetricIntervalHull)
+    return symmetric_interval_hull(LazySets.concretize(sih.X))
+end
+
 # interval specialization
 function box_approximation_symmetric(x::Interval)
     abs_inf = abs(min(x))
@@ -110,18 +114,12 @@ The lengths of the sides can be recovered from the distance among support
 functions in the same directions.
 """
 @inline function box_approximation_helper(S::LazySet{N}) where {N<:Real}
-    zero_N = zero(N)
-    one_N = one(N)
     n = dim(S)
     c = Vector{N}(undef, n)
     r = Vector{N}(undef, n)
-    d = zeros(N, n)
     @inbounds for i in 1:n
-        d[i] = one_N
-        htop = ρ(d, S)
-        d[i] = -one_N
-        hbottom = -ρ(d, S)
-        d[i] = zero_N
+        htop = ρ(SingleEntryVector(i, n, one(N)), S)
+        hbottom = -ρ(SingleEntryVector(i, n, -one(N)), S)
         c[i] = (htop + hbottom) / 2
         r[i] = (htop - hbottom) / 2
         if r[i] < 0

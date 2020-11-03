@@ -6,8 +6,11 @@ support vectors.
 """
 module Approximations
 
-using LazySets, LazySets.Arrays, Requires, LinearAlgebra, SparseArrays
-using LazySets: _isapprox, _rtol, _normal_Vector, isapproxzero
+using LazySets, LazySets.Arrays, Requires, LinearAlgebra, SparseArrays,
+      MathProgBase
+using LazySets: _isapprox, _leq, _rtol, _normal_Vector, isapproxzero,
+                default_lp_solver
+import LazySets: distance
 using ..Assertions: @assert, activate_assertions
 # activate assertions by default
 activate_assertions(Approximations)
@@ -38,7 +41,9 @@ include("box_approximations.jl")
 include("template_directions.jl")
 include("overapproximate.jl")
 include("underapproximate.jl")
+include("approximate.jl")
 include("decompositions.jl")
+include("distance.jl")
 include("hausdorff_distance.jl")
 include("init.jl")
 

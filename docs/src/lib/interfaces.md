@@ -45,6 +45,10 @@ support_vector
 ρ(::AbstractVector{N}, ::LazySet{N}) where {N<:Real}
 support_function
 σ
+singleton_list(::LazySet)
+constraints(::LazySet)
+vertices(::LazySet)
+delaunay
 ```
 
 ### Other globally defined set functions
@@ -55,7 +59,8 @@ norm(::LazySet, ::Real=Inf)
 radius(::LazySet, ::Real=Inf)
 diameter(::LazySet, ::Real=Inf)
 isbounded(::LazySet)
-isbounded_unit_dimensions(::LazySet{N}) where {N<:Real}
+_isbounded_unit_dimensions(::LazySet{N}) where {N<:Real}
+_isbounded_stiemke(::HPolyhedron{N}) where {N<:Real}
 an_element(::LazySet{N}) where {N<:Real}
 tosimplehrep(::LazySet)
 isuniversal(::LazySet{N}, ::Bool=false) where {N<:Real}
@@ -68,6 +73,7 @@ isequivalent(::LazySet, ::LazySet)
 isconvextype(::Type{<:LazySet})
 surface(::LazySet{N}) where {N}
 area(::LazySet{N}) where {N}
+concretize(X::LazySet)
 ```
 
 Plotting is available for general one- or two-dimensional `LazySet`s, provided
@@ -151,6 +157,7 @@ isbounded(::AbstractCentrallySymmetric)
 isuniversal(::AbstractCentrallySymmetric{N}, ::Bool=false) where {N<:Real}
 an_element(::AbstractCentrallySymmetric{N}) where {N<:Real}
 isempty(::AbstractCentrallySymmetric)
+center(::AbstractCentrallySymmetric{N}, ::Int) where {N<:Real}
 ```
 
 ### Implementations
@@ -177,6 +184,8 @@ constrained_dimensions(::AbstractPolyhedron)
 linear_map(::AbstractMatrix{N}, ::AbstractPolyhedron{N}) where {N<:Real}
 chebyshev_center(::AbstractPolyhedron{N}) where {N<:AbstractFloat}
 an_element(::AbstractPolyhedron{N}) where {N<:Real}
+isbounded(::AbstractPolyhedron{N}) where {N<:Real}
+vertices_list(::AbstractPolyhedron)
 ```
 
 Plotting (bounded) polyhedra is available, too:
@@ -190,6 +199,7 @@ plot_recipe(::AbstractPolyhedron{N}, ::N=zero(N)) where {N<:Real}
 * [Half-space (HalfSpace)](@ref def_HalfSpace)
 * [Polyhedron in constraint representation (HPolyhedron)](@ref def_HPolyhedron)
 * [Hyperplane](@ref def_Hyperplane)
+* [Line2D](@ref def_Line2D)
 * [Line](@ref def_Line)
 * [Universe](@ref def_Universe)
 
@@ -209,7 +219,6 @@ This interface defines the following functions:
 ```@docs
 isbounded(::AbstractPolytope)
 isuniversal(::AbstractPolytope{N}, ::Bool=false) where {N<:Real}
-singleton_list(::AbstractPolytope{N}) where {N<:Real}
 isempty(::AbstractPolytope)
 ```
 
@@ -264,6 +273,7 @@ tohrep(::HPOLYGON) where {HPOLYGON<:AbstractHPolygon}
 tovrep(::AbstractHPolygon{N}) where {N<:Real}
 addconstraint!(::AbstractHPolygon{N}, ::LinearConstraint{N}) where {N<:Real}
 addconstraint!(::Vector{LC}, ::LinearConstraint{N}) where {N<:Real, LC<:LinearConstraint{N}}
+normalize(P::AbstractHPolygon{N}, p=N(2)) where {N<:Real}
 isredundant(::LinearConstraint{N}, ::LinearConstraint{N}, ::LinearConstraint{N}) where {N<:Real}
 remove_redundant_constraints!(::AbstractHPolygon)
 constraints_list(::AbstractHPolygon{N}) where {N<:Real}
@@ -292,6 +302,8 @@ This interface defines the following functions:
 dim(::AbstractCentrallySymmetricPolytope)
 an_element(::AbstractCentrallySymmetricPolytope{N}) where {N<:Real}
 isempty(::AbstractCentrallySymmetricPolytope)
+isuniversal(::AbstractCentrallySymmetricPolytope{N}, ::Bool=false) where {N<:Real}
+center(::AbstractCentrallySymmetricPolytope{N}, ::Int) where {N<:Real}
 ```
 
 ### Implementations
@@ -323,6 +335,7 @@ constraints_list(::AbstractZonotope{N}; ::Bool=true) where {N<:AbstractFloat}
 vertices_list(::AbstractZonotope{N}) where {N<:Real}
 order(::AbstractZonotope)
 togrep(::AbstractZonotope)
+⊆(Z::AbstractZonotope{N}, H::AbstractHyperrectangle{N}) where {N<:Real}
 ```
 
 ### Implementations
@@ -389,6 +402,7 @@ This interface defines the following functions:
 ∈(::AbstractVector{N}, ::AbstractSingleton{N}) where {N<:Real}
 an_element(::AbstractSingleton{N}) where {N<:Real}
 center(::AbstractSingleton{N}) where {N<:Real}
+vertices(::AbstractSingleton{N}) where {N}
 vertices_list(::AbstractSingleton{N}) where {N<:Real}
 radius_hyperrectangle(::AbstractSingleton{N}) where {N<:Real}
 radius_hyperrectangle(::AbstractSingleton{N}, ::Int) where {N<:Real}

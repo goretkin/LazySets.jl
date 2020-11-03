@@ -317,7 +317,7 @@ end
 # - i = i + 1, j = i + 1
 # - for any pair (i, j) create four vectors [..., i: ±1, ..., j: ±1, ...]
 # in the end continue with box directions
-function Base.iterate(od::OctDirections{N, SparseVector{N, Int}}, state::Tuple) where {N}
+function _iterate_state(od::OctDirections{N}, state) where {N}
     # continue with octagon directions
     vec = state[1]
     i = state[2]
@@ -350,9 +350,36 @@ function Base.iterate(od::OctDirections{N, SparseVector{N, Int}}, state::Tuple) 
     return (copy(vec), (vec, i, j))
 end
 
+function Base.iterate(od::OctDirections{N, SparseVector{N, Int}}, state::Tuple) where {N}
+    _iterate_state(od, state)
+end
+
 function Base.iterate(od::OctDirections{N, SparseVector{N, Int}}, state::Int) where {N}
     # continue with box directions
     return iterate(BoxDirections{N, SparseVector{N, Int}}(od.n), state)
+end
+
+# ----------------------------------
+# implementation with regular arrays
+# ----------------------------------
+function Base.iterate(od::OctDirections{N, Vector{N}}) where {N}
+    if od.n == 1
+        # fall back to box directions in 1D case
+        return iterate(od, 1)
+    end
+    vec = zeros(N, od.n)
+    vec[1] = one(N)
+    vec[2] = one(N)
+    return (copy(vec), (vec, 1, 2))
+end
+
+function Base.iterate(od::OctDirections{N, Vector{N}}, state::Tuple) where {N}
+    _iterate_state(od, state)
+end
+
+function Base.iterate(od::OctDirections{N, Vector{N}}, state::Int) where {N}
+    # continue with box directions
+    return iterate(BoxDirections{N, Vector{N}}(od.n), state)
 end
 
 # ==================================================
@@ -500,8 +527,12 @@ Cartesian components of each direction are obtained with
 The integer passed as an argument is used to discretize ``φ``:
 
 ```jldoctest; filter = r"2246[0-9]*e-16"
-julia> pd = PolarDirections(2)
-PolarDirections{Float64,Array{Float64,1}}(2, Array{Float64,1}[[1.0, 0.0], [-1.0, 1.2246467991473532e-16]])
+julia> pd = PolarDirections(2);
+
+julia> pd.stack
+2-element Array{Array{Float64,1},1}:
+ [1.0, 0.0]
+ [-1.0, 1.2246467991473532e-16]
 
 julia> length(pd)
 2
@@ -685,8 +716,14 @@ passed (in which case the optional argument `n` needs to be specified).
 Creating a template with box directions in dimension two:
 
 ```jldoctest
-julia> dirs = CustomDirections([[1.0, 0.0], [-1.0, 0.0], [0.0, 1.0], [0.0, -1.0]])
-CustomDirections{Float64,Array{Float64,1}}(Array{Float64,1}[[1.0, 0.0], [-1.0, 0.0], [0.0, 1.0], [0.0, -1.0]], 2, true, true)
+julia> dirs = CustomDirections([[1.0, 0.0], [-1.0, 0.0], [0.0, 1.0], [0.0, -1.0]]);
+
+julia> dirs.directions
+4-element Array{Array{Float64,1},1}:
+ [1.0, 0.0]
+ [-1.0, 0.0]
+ [0.0, 1.0]
+ [0.0, -1.0]
 
 julia> LazySets.Approximations.isbounding(dirs)
 true

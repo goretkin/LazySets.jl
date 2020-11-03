@@ -10,7 +10,8 @@ export dot_zero,
        to_negative_vector,
        _above,
        _dr,
-       _up
+       _up,
+       distance
 
 """
     dot_zero(x::AbstractVector{N}, y::AbstractVector{N}) where{N<:Real}
@@ -96,12 +97,12 @@ function samedir(u::AbstractVector{N},
     no_factor = true
     factor = 0
     @inbounds for i in 1:length(u)
-        if u[i] == 0
-            if v[i] != 0
+        if isapproxzero(u[i])
+            if !isapproxzero(v[i])
                 return (false, 0)
             end
             continue
-        elseif v[i] == 0
+        elseif isapproxzero(v[i])
             return (false, 0)
         end
         if no_factor
@@ -110,7 +111,7 @@ function samedir(u::AbstractVector{N},
             if factor < 0
                 return (false, 0)
             end
-        elseif factor != u[i] / v[i]
+        elseif !_isapprox(factor, u[i] / v[i])
             return (false, 0)
         end
     end
@@ -352,4 +353,29 @@ end
 @inline function is_right_turn(u::AbstractVector{N},
                                v::AbstractVector{N}) where {N<:Real}
     return _geq(right_turn(u, v), zero(N))
+end
+
+"""
+    distance(x::AbstractVector, y::AbstractVector, p::Real=2.0)
+
+Compute the distance between two vectors with respect to the given `p`-norm,
+computed as
+
+```math
+    \\|x - y\\|_p = \\left( \\sum_{i=1}^n | x_i - y_i |^p \\right)^{1/p}
+```
+
+### Input
+
+- `x` -- vector
+- `y` -- vector
+- `p` -- (optional, default: `2.0`) the `p`-norm used; `p = 2.0` corresponds to
+         the usual Euclidean norm
+
+### Output
+
+A scalar representing ``‖ x - y ‖_p``.
+"""
+function distance(x::AbstractVector, y::AbstractVector, p::Real=2.0)
+    return norm(x - y, p)
 end

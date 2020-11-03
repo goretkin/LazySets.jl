@@ -20,7 +20,11 @@ an_element(::UnionSet{N}) where {N<:Real}
 ∈(::AbstractVector{N}, ::UnionSet{N}) where {N<:Real}
 isempty(::UnionSet)
 isbounded(::UnionSet)
+vertices_list(::UnionSet)
 ```
+
+Inherited from [`LazySet`](@ref):
+* [`singleton_list`](@ref singleton_list(::LazySet))
 
 ## [``n``-ary set union (UnionSetArray)](@id def_UnionSetArray)
 
@@ -34,4 +38,8 @@ an_element(::UnionSetArray{N}) where {N<:Real}
 ∈(::AbstractVector{N}, ::UnionSetArray{N}) where {N<:Real}
 isempty(::UnionSetArray)
 isbounded(::UnionSetArray)
+vertices_list(::UnionSetArray)
 ```
+
+Inherited from [`LazySet`](@ref):
+* [`singleton_list`](@ref singleton_list(::LazySet))

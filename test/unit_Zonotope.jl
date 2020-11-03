@@ -90,6 +90,18 @@ for N in [Float64, Rational{Int}, Float32]
     @test Z5.center == N[0, 1]
     @test Z5.generators == N[0.5 0.5 0.5 0; -0.5 0.5 0 0.5]
 
+    # in-place linear map
+    Zin = convert(Zonotope, BallInf(zeros(N, 2), N(1)))
+    Zout = Zonotope(similar(Zin.center), similar(Zin.generators))
+    M = N[0 1; -1 0]
+    LazySets.linear_map!(Zout, M, Zin)
+    @test Zout == Zonotope(N[0, 0], N[0 1; -1 0])
+
+    # in-place scale
+    Z5aux = copy(Z3)
+    scale!(N(0.5), Z5aux)
+    @test isequivalent(Z5, Z5aux)
+
     # intersection with a hyperplane
     H1 = Hyperplane(N[1, 1], N(3))
     intersection_empty, point = is_intersection_empty(Z1, H1, true)
@@ -130,6 +142,13 @@ for N in [Float64, Rational{Int}, Float32]
         @test convert(Zonotope, AZ) == togrep(AZ) == Z
     end
 
+    # conversion from lazy affine map
+    A = N[1 0; 0 1]
+    b = N[1, 1]
+    B = BallInf(N[0, 0], N(1))
+    Z = convert(Zonotope, A * B + b)
+    @test Z == Zonotope(N[1, 1], N[1 0; 0 1])
+
     # test conversion from hyperrectangular sets
     Z = convert(Zonotope, Hyperrectangle(N[2, 3], N[4, 5]))
     @test Z.center == N[2, 3] && diag(Z.generators) == N[4, 5]
@@ -152,6 +171,11 @@ for N in [Float64, Rational{Int}, Float32]
     # split a zonotope
     Z = Zonotope(N[0, 0], N[1 1; -1 1])
     Z1, Z2 = split(Z, 1) # in this case the splitting is exact
+    @test Z1 ⊆ Z && Z2 ⊆ Z
+    Z1, Z2, Z3, Z4 = split(Z, [1, 2], [1, 1])
+    @test Z1 ⊆ Z && Z2 ⊆ Z && Z3 ⊆ Z && Z4 ⊆ Z
+    Z = Zonotope(SVector{2}(N[0, 0]), SMatrix{2, 2}(N[1 1; -1 1]))
+    Z1, Z2 = split(Z, 1)
     @test Z1 ⊆ Z && Z2 ⊆ Z
 
     # converts the cartesian product of two zonotopes to a new zonotope
@@ -182,6 +206,11 @@ for N in [Float64, Rational{Int}, Float32]
     B = BallInf(zeros(N, 3), N(1))  # equivalent to Z
     constraints = constraints_list(Z)
     @test constraints isa Vector{<:HalfSpace{N}} && length(constraints) == 6
+
+    # 1D projection works correctly even with zero generators (#2147)
+    Z = convert(Zonotope, BallInf(N[0, 0], N(1)))
+    Z2 = project(Z, [1])
+    @test Z2 == Zonotope(N[0], hcat(N[1]))
 end
 
 for N in [Float64]
@@ -213,6 +242,16 @@ for N in [Float64]
         Z = Zonotope(N[0, 0], N[2 3; 0 0])
         P = tovrep(HPolygon(constraints_list(Z)))
         @test ispermutation(vertices_list(P), [N[5, 0], [-5, 0]])
+
+        # test that zero generators are ignored (#2147)
+        G = spzeros(N, 100, 100)
+        G[1, 1] = N(1)
+        Z = Zonotope(zeros(N, 100), G)
+        v1 = zeros(N, 100)
+        v1[1] = N(1)
+        v2 = zeros(N, 100)
+        v2[1] = N(-1)
+        @test ispermutation(vertices_list(Z), [v1, v2])
     end
 
     # vertices for singleton zonotope (#1881)
@@ -225,8 +264,24 @@ for N in [Float64]
     vlistZ = vertices_list(Z)
     @test length(vlistZ) == 6
     @test ispermutation(vlistZ, [N[-2, -2], N[0, -2], N[2, 0], N[2, 2], N[0, 2], N[-2, 0]])
+
+    # test 3d zonotope vertex enumeration
+    Z = Zonotope([0., 0., 0.], [1. 0. 1.; 0. 1. 1.; 0.1 1. 1.])
+    vlistZ = vertices_list(Z)
+    @test length(vlistZ) == 8
+
+    # test 2d zonotope generators in positive orthant vertex enumeration
+    Z = Zonotope([0., 0.], [1. 0. 1.; 0. 1. 1.])
+    vlistZ = vertices_list(Z)
+    @test length(vlistZ) == 6
+
+    # test 2d zonotope generators in negative orthant vertex enumeration
+    Z = Zonotope([0., 0.], -[1. 0. 1.; 0. 1. 1.])
+    vlistZ = vertices_list(Z)
+    @test length(vlistZ) == 6
+
     # option to not apply the convex hull operation
-    vlistZ = vertices_list(Z, apply_convex_hull=false)
+    vlistZ = LazySets._vertices_list_iterative(Z.center, Z.generators, apply_convex_hull=false)
     @test length(vlistZ) == 8
     @test ispermutation(convex_hull(vlistZ), [N[-2, -2], N[0, -2], N[2, 0], N[2, 2], N[0, 2], N[-2, 0]])
 
@@ -246,6 +301,9 @@ for N in [Float64]
     H1 = Hyperplane(N[1, 1], N(3))
     intersection_empty, point = is_intersection_empty(Z1, H1, true)
     @test point ∈ Z1 && point ∈ H1
+    # zonotope without generators (#2204)
+    Z3 = Zonotope(N[0, 0], Matrix{N}(undef, 2, 0))
+    @test isdisjoint(Z3, H1)
 
     # isdisjoint
     result, w = isdisjoint(Z1, Z2, true)
@@ -253,4 +311,22 @@ for N in [Float64]
     Z3 = Zonotope(N[2, 1], Matrix{N}(I, 2, 2))
     @test_throws ErrorException isdisjoint(Z2, Z3, true)
     @test !isdisjoint(Z2, Z3)
+
+    # issubset
+    Z = Zonotope(N[0, 0], N[1 1; -1 1])
+    H1 = Hyperrectangle(low=N[-2, -2], high=N[2, 2])
+    H2 = Hyperrectangle(low=N[-2, -2], high=N[2, 0])
+    @test issubset(Z, H1)
+    @test !issubset(Z, H2)
+
+    # quadratic map
+    Z = Zonotope(N[0, 0], N[1 0; 0 1])
+    Q1 = N[1/2 0; 0 1/2]
+    Q2 = N[0 1/2; 1/2 0]
+    # note that there may be repeated generators (though zero generaors are removed)
+    @test quadratic_map([Q1, Q2], Z) == Zonotope(N[0.5, 0], N[0.25 0.25 0; 0 0 1])
+    Z = Zonotope(N[0, 0], N[1 1; 0 1])
+    Q1 = N[1 1; 1 1]
+    Q2 = N[-1 0; 0 -1]
+    @test quadratic_map([Q1, Q2], Z) == Zonotope(N[2.5, -1.5], N[0.5 2 4; -0.5 -1 -2])
 end

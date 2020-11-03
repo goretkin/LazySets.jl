@@ -189,7 +189,8 @@ function vertices_list(H::AbstractHyperrectangle{N}) where {N<:Real}
     trivector = Vector{Int8}(undef, n)
     m = 1
     c = center(H)
-    v = copy(c)
+    v = similar(c)
+    copyto!(v, c)
     @inbounds for i in 1:n
         ri = radius_hyperrectangle(H, i)
         if iszero(ri)
@@ -204,7 +205,7 @@ function vertices_list(H::AbstractHyperrectangle{N}) where {N<:Real}
     # create vertices by modifying the three-valued vector and constructing the
     # corresponding point; for efficiency, we create a copy of the old point and
     # modify every entry that has changed in the three-valued vector
-    vlist = Vector{Vector{N}}(undef, m)
+    vlist = Vector{typeof(c)}(undef, m)
     vlist[1] = copy(v)
     @inbounds for i in 2:m
         for j in 1:length(v)
@@ -321,8 +322,7 @@ function _ρ_sev_hyperrectangle(d::SingleEntryVector{N}, H::AbstractHyperrectang
 
     @assert d.n == dim(H) "a $(d.n)-dimensional vector is " *
                                 "incompatible with a $(dim(H))-dimensional set"
-    c = center(H)
-    return d.v * c[d.i] + abs(d.v) * radius_hyperrectangle(H, d.i)
+    return d.v * center(H, d.i) + abs(d.v) * radius_hyperrectangle(H, d.i)
 end
 
 """
@@ -424,10 +424,9 @@ Then ``x ∈ H`` iff ``|c_i - x_i| ≤ r_i`` for all ``i=1,…,n``.
 function ∈(x::AbstractVector{N},
            H::AbstractHyperrectangle{N}) where {N<:Real}
     @assert length(x) == dim(H)
-    c = center(H)
     @inbounds for i in eachindex(x)
         ri = radius_hyperrectangle(H, i)
-        if !_leq(abs(c[i] - x[i]), ri)
+        if !_leq(abs(center(H, i) - x[i]), ri)
             return false
         end
     end
@@ -468,7 +467,7 @@ Return the higher coordinate of a hyperrectangular set in a given dimension.
 The higher coordinate of the hyperrectangular set in the given dimension.
 """
 function high(H::AbstractHyperrectangle{N}, i::Int) where {N<:Real}
-    return center(H)[i] + radius_hyperrectangle(H, i)
+    return center(H, i) + radius_hyperrectangle(H, i)
 end
 
 """
@@ -503,7 +502,7 @@ Return the lower coordinate of a hyperrectangular set in a given dimension.
 The lower coordinate of the hyperrectangular set in the given dimension.
 """
 function low(H::AbstractHyperrectangle{N}, i::Int) where {N<:Real}
-    return center(H)[i] - radius_hyperrectangle(H, i)
+    return center(H, i) - radius_hyperrectangle(H, i)
 end
 
 """

@@ -9,6 +9,7 @@ Hence this set type is not part of the convex-set family `LazySet`.
 
 ```@docs
 Rectification
+set(::Rectification)
 dim(::Rectification)
 σ(::AbstractVector{N}, ::Rectification{N}) where {N<:Real}
 σ(::AbstractVector{N}, ::Rectification{N, <:AbstractHyperrectangle{N}}) where {N<:Real}
@@ -21,6 +22,9 @@ isempty(::Rectification)
 isbounded(::Rectification{N}) where {N<:Real}
 to_union_of_projections(::Rectification{N}, ::Bool=false) where {N<:Real}
 ```
+
+Inherited from [`LazySet`](@ref):
+* [`singleton_list`](@ref singleton_list(::LazySet))
 
 ## Rectification cache
 

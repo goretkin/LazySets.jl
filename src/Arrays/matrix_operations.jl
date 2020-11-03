@@ -7,7 +7,9 @@ export _At_mul_B,
        cross_product,
        nonzero_columns,
        extend,
-       projection_matrix
+       projection_matrix,
+       remove_zero_columns,
+       same_sign
 
 # default tolerance for matrix condition number (see 'isinvertible')
 const DEFAULT_COND_TOL = 1e6
@@ -264,4 +266,44 @@ julia> Matrix(ans)
 function projection_matrix(block::AbstractVector{Int}, n::Int, N::DataType=Float64)
     m = length(block)
     return sparse(1:m, block, ones(N, m), m, n)
+end
+
+"""
+    remove_zero_columns(A::AbstractMatrix)
+
+Return a matrix with all columns containing only zero entries removed.
+
+### Input
+
+- `A` -- matrix
+
+### Output
+
+The original matrix `A` if it contains no zero columns or otherwise a new matrix
+where those columns have been removed.
+"""
+function remove_zero_columns(A::AbstractMatrix)
+    nzcol = nonzero_columns(A)
+    if length(nzcol) == size(A, 2)
+        return A
+    else
+        return A[:, nzcol]
+    end
+end
+
+"""
+    same_sign(A::AbstractMatrix)
+
+Check whether all elements of the given matrix have the same sign.
+
+### Input
+
+- `A` -- matrix
+
+### Output
+
+`true` if and only if all elements in `M` have the same sign.
+"""
+function same_sign(M::AbstractMatrix)
+    return sum(abs, M) == abs(sum(M))
 end

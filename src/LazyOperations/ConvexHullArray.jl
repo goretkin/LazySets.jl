@@ -186,25 +186,31 @@ function isempty(cha::ConvexHullArray)
 end
 
 """
-    vertices_list(X::ConvexHullArray{N, Singleton{N, VT}}) where {N, VT}
+    vertices_list(cha::ConvexHullArray; apply_convex_hull::Bool=true,
+                  backend=nothing)
 
-Return the list of vertices of the convex hull array of singletons.
+Return the list of vertices of the convex hull of a finite number of convex sets.
 
 ### Input
 
-- `X` -- convex hull array of singletons
+- `cha`               -- convex hull of a finite number of convex sets
+- `apply_convex_hull` -- (optional, default: `true`) if `true`, post-process the
+                         vertices using a convex-hull algorithm
+- `backend`           -- (optional, default: `nothing`) backend for computing
+                         the convex hull (see argument `apply_convex_hull`)
 
 ### Output
 
-The list of elements in the array that defines `X`.
+The list of vertices.
 """
-function vertices_list(X::ConvexHullArray{N, Singleton{N, VT}}) where {N, VT}
-    m = length(X.array)
-    vertices = Vector{VT}(undef, m)
-    @inbounds for i in 1:m
-        vertices[i] = X.array[i].element
+function vertices_list(cha::ConvexHullArray;
+                       apply_convex_hull::Bool=true,
+                       backend=nothing)
+    vlist = vcat([vertices_list(Xi) for Xi in array(cha)]...)
+    if apply_convex_hull
+        convex_hull!(vlist, backend=backend)
     end
-    return vertices
+    return vlist
 end
 
 # list of constraints of the convex hull array of singletons
@@ -221,4 +227,18 @@ function ∈(x::AbstractVector{N}, X::ConvexHullArray{N, Singleton{N, VT}}) wher
     ST = n == 2 ? VPolygon : VPolytope
     V = convert(ST, X)
     return x ∈ V
+end
+
+function concretize(cha::ConvexHullArray)
+    a = array(cha)
+    @assert !isempty(a) "an empty convex hull is not allowed"
+    X = cha
+    @inbounds for (i, Y) in enumerate(a)
+        if i == 1
+            X = concretize(Y)
+        else
+            X = convex_hull(X, concretize(Y))
+        end
+    end
+    return X
 end

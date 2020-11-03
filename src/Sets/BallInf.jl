@@ -119,6 +119,22 @@ function isflat(B::BallInf)
     return isapproxzero(B.radius)
 end
 
+function load_genmat_ballinf_static()
+return quote
+    function genmat(B::BallInf{N, SVector{L, N}}) where {L, N}
+        r = B.radius
+        if isapproxzero(B.radius)
+            return SMatrix{L, 0, N, 0}()
+        else
+            gens = zeros(MMatrix{L, L})
+            @inbounds for i in 1:L
+                gens[i, i] = r
+            end
+            return SMatrix(gens)
+        end
+    end
+end
+end
 
 # --- AbstractCentrallySymmetric interface functions ---
 
@@ -211,16 +227,17 @@ function ρ(d::AbstractVector{N}, B::BallInf{N}) where {N<:Real}
     @assert length(d) == dim(B) "a $(length(d))-dimensional vector is " *
                                 "incompatible with a $(dim(B))-dimensional set"
     c = center(B)
+    r = B.radius
     if length(d) > 30
         # more efficient for higher dimensions
-        return dot(d, c) + B.radius * sum(abs, d)
+        return dot(d, c) + r * sum(abs, d)
     end
     res = zero(N)
     @inbounds for (i, di) in enumerate(d)
         if di < zero(N)
-            res += di * (c[i] - B.radius)
+            res += di * (c[i] - r)
         elseif di > zero(N)
-            res += di * (c[i] + B.radius)
+            res += di * (c[i] + r)
         end
     end
     return res

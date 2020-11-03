@@ -1,11 +1,12 @@
-import Base: ∈
+import Base: ∈, split
 
 export AbstractZonotope,
        genmat,
        generators,
        ngens,
        order,
-       togrep
+       togrep,
+       split!
 
 """
     AbstractZonotope{N<:Real} <: AbstractCentrallySymmetricPolytope{N}
@@ -39,8 +40,9 @@ implementation of the other function call the fallback implementation
 
 ```jldoctest; setup = :(using LazySets: subtypes)
 julia> subtypes(AbstractZonotope)
-3-element Array{Any,1}:
+4-element Array{Any,1}:
  AbstractHyperrectangle
+ HParallelotope
  LineSegment
  Zonotope
 ```
@@ -236,10 +238,11 @@ The support function of the zonotopic set in the given direction.
 
 The support value is ``cᵀ d + ‖Gᵀ d‖₁`` where ``c`` is the center and ``G`` is
 the generator matrix of `Z`.
-
 """
 function ρ(d::AbstractVector{N}, Z::AbstractZonotope{N}) where {N<:Real}
-    return dot(center(Z), d) + sum(abs.(transpose(genmat(Z)) * d))
+    c = center(Z)
+    G = genmat(Z)
+    return dot(c, d) + _abs_sum(d, G)
 end
 
 """
@@ -400,6 +403,19 @@ List of vertices as a vector of vectors.
 
 ### Algorithm
 
+#### Two-dimensional case
+
+We use a trick to speed up enumerating vertices of 2-dimensional zonotopic
+sets with all generators in the first quadrant or third quadrant (same sign).
+Namely, sort the generators in angle and add them clockwise in increasing
+order and anticlockwise in decreasing order, the algorithm detail:
+https://math.stackexchange.com/q/3356460
+
+To avoid cumulative sum from both directions separately, we build a 2d index matrix
+to sum generators for both directions in one matrix-vector product.
+
+#### General case
+
 If the zonotopic set has ``p`` generators, each vertex is the result of summing
 the center with some linear combination of generators, where the combination
 factors are ``ξ_i ∈ \\{-1, 1\\}``.
@@ -410,20 +426,31 @@ this method; otherwise, redundant vertices may be present.
 """
 function vertices_list(Z::AbstractZonotope{N};
                        apply_convex_hull::Bool=true) where {N<:Real}
-    p = ngens(Z)
-    if p == 0
-        return [center(Z)]
-    end
-
-    vlist = Vector{Vector{N}}()
-    sizehint!(vlist, 2^p)
+    c = center(Z)
     G = genmat(Z)
+    n, p = size(G)
 
-    for ξi in Iterators.product([[1, -1] for i = 1:p]...)
-        push!(vlist, center(Z) .+ G * collect(ξi))
+    # empty generators => sole vertex is the center
+    if p == 0
+        return [c]
     end
 
-    return apply_convex_hull ? convex_hull!(vlist) : vlist
+    if n == 1
+        return vertices_list(convert(Interval, Z))
+
+    elseif n == 2
+        if p == 1
+            return _vertices_list_2D_order_one_half(c, G, apply_convex_hull=apply_convex_hull)
+        elseif p == 2
+            return _vertices_list_2D_order_one(c, G, apply_convex_hull=apply_convex_hull)
+        else
+            return _vertices_list_2D(c, G, apply_convex_hull=apply_convex_hull)
+        end
+
+    else
+        Gred = remove_zero_columns(G)
+        return _vertices_list_iterative(c, Gred, apply_convex_hull=apply_convex_hull)
+    end
 end
 
 """
@@ -497,13 +524,8 @@ function constraints_list(Z::AbstractZonotope{N}; check_full_rank::Bool=true
 
     # special handling of 1D case
     if n == 1
-        if p > 1
-            error("1D-zonotope constraints currently only support a single " *
-                  "generator")
-        end
-
-        c = center(Z)[1]
-        g = G[:, 1][1]
+        c = center(Z, 1)
+        g = sum(abs.(view(G, 1, :)))
         constraints = [LinearConstraint([N(1)], c + g),
                        LinearConstraint([N(-1)], g - c)]
         return constraints
@@ -528,4 +550,108 @@ function constraints_list(Z::AbstractZonotope{N}; check_full_rank::Bool=true
         push!(constraints, LinearConstraint(c⁻, d⁻))
     end
     return constraints
+end
+
+"""
+    split(Z::AbstractZonotope, j::Int)
+
+Return two zonotopes obtained by splitting the given zonotope.
+
+### Input
+
+- `Z` -- zonotope
+- `j` -- index of the generator to be split
+
+### Output
+
+The zonotope obtained by splitting `Z` into two zonotopes such that
+their union is `Z` and their intersection is possibly non-empty.
+
+### Algorithm
+
+This function implements [Prop. 3, 1], that we state next. The zonotope
+``Z = ⟨c, g^{(1, …, p)}⟩`` is split into:
+
+```math
+Z₁ = ⟨c - \\frac{1}{2}g^{(j)}, (g^{(1, …,j-1)}, \\frac{1}{2}g^{(j)}, g^{(j+1, …, p)})⟩ \\\\
+Z₂ = ⟨c + \\frac{1}{2}g^{(j)}, (g^{(1, …,j-1)}, \\frac{1}{2}g^{(j)}, g^{(j+1, …, p)})⟩,
+```
+such that ``Z₁ ∪ Z₂ = Z`` and ``Z₁ ∩ Z₂ = Z^*``, where
+
+```math
+Z^* = ⟨c, (g^{(1,…,j-1)}, g^{(j+1,…, p)})⟩.
+```
+
+[1] *Althoff, M., Stursberg, O., & Buss, M. (2008). Reachability analysis of
+nonlinear systems with uncertain parameters using conservative linearization.
+In Proc. of the 47th IEEE Conference on Decision and Control.*
+"""
+function split(Z::AbstractZonotope, j::Int)
+    return _split(convert(Zonotope, Z), j)
+end
+
+"""
+    split(Z::AbstractZonotope, gens::AbstractVector{Int}, nparts::AbstractVector{Int})
+
+Split a zonotope along the given generators into a vector of zonotopes.
+
+### Input
+
+- `Z`    -- zonotope
+- `gens` -- vector of indices of the generators to be split
+- `n`    -- vector of integers describing the number of partitions in the
+            corresponding generator
+
+### Output
+
+The zonotopes obtained by splitting `Z` into `2^{n_i}` zonotopes for each
+generator `i` such that their union is `Z` and their intersection is
+possibly non-empty.
+
+### Examples
+
+Splitting of a two-dimensional zonotope along its first generator:
+
+```jldoctest zonotope_label
+julia> Z = Zonotope([1.0, 0.0], [0.1 0.0; 0.0 0.1])
+Zonotope{Float64,Array{Float64,1},Array{Float64,2}}([1.0, 0.0], [0.1 0.0; 0.0 0.1])
+
+julia> split(Z, [1], [1])
+2-element Array{Zonotope{Float64,Array{Float64,1},Array{Float64,2}},1}:
+ Zonotope{Float64,Array{Float64,1},Array{Float64,2}}([0.95, 0.0], [0.05 0.0; 0.0 0.1])
+ Zonotope{Float64,Array{Float64,1},Array{Float64,2}}([1.05, 0.0], [0.05 0.0; 0.0 0.1])
+```
+Here, the first vector in the arguments corresponds to the zonotope's
+generator to be split, and the second vector corresponds to the exponent of
+`2^n` parts that the zonotope will be split into along the corresponding generator.
+
+Splitting of a two-dimensional zonotope along its generators:
+
+```
+julia> Z = Zonotope([1.0, 0.0], [0.1 0.0; 0.0 0.1])
+Zonotope{Float64,Array{Float64,1},Array{Float64,2}}([1.0, 0.0], [0.1 0.0; 0.0 0.1])
+
+julia> split(Z, [1, 2], [2, 2])
+16-element Array{Zonotope{Float64,Array{Float64,1},Array{Float64,2}},1}:
+Zonotope{Float64,Array{Float64,1},Array{Float64,2}}([0.925, -0.075], [0.025 0.0; 0.0 0.025])
+Zonotope{Float64,Array{Float64,1},Array{Float64,2}}([0.925, -0.025], [0.025 0.0; 0.0 0.025])
+Zonotope{Float64,Array{Float64,1},Array{Float64,2}}([0.925, 0.025], [0.025 0.0; 0.0 0.025])
+Zonotope{Float64,Array{Float64,1},Array{Float64,2}}([0.925, 0.075], [0.025 0.0; 0.0 0.025])
+Zonotope{Float64,Array{Float64,1},Array{Float64,2}}([0.975, -0.075], [0.025 0.0; 0.0 0.025])
+Zonotope{Float64,Array{Float64,1},Array{Float64,2}}([0.975, -0.025], [0.025 0.0; 0.0 0.025])
+Zonotope{Float64,Array{Float64,1},Array{Float64,2}}([0.975, 0.025], [0.025 0.0; 0.0 0.025])
+Zonotope{Float64,Array{Float64,1},Array{Float64,2}}([0.975, 0.075], [0.025 0.0; 0.0 0.025])
+Zonotope{Float64,Array{Float64,1},Array{Float64,2}}([1.025, -0.075], [0.025 0.0; 0.0 0.025])
+Zonotope{Float64,Array{Float64,1},Array{Float64,2}}([1.025, -0.025], [0.025 0.0; 0.0 0.025])
+Zonotope{Float64,Array{Float64,1},Array{Float64,2}}([1.025, 0.025], [0.025 0.0; 0.0 0.025])
+Zonotope{Float64,Array{Float64,1},Array{Float64,2}}([1.025, 0.075], [0.025 0.0; 0.0 0.025])
+Zonotope{Float64,Array{Float64,1},Array{Float64,2}}([1.075, -0.075], [0.025 0.0; 0.0 0.025])
+Zonotope{Float64,Array{Float64,1},Array{Float64,2}}([1.075, -0.025], [0.025 0.0; 0.0 0.025])
+Zonotope{Float64,Array{Float64,1},Array{Float64,2}}([1.075, 0.025], [0.025 0.0; 0.0 0.025])
+Zonotope{Float64,Array{Float64,1},Array{Float64,2}}([1.075, 0.075], [0.025 0.0; 0.0 0.025])
+```
+Here the zonotope is split along both of its generators, each time into four parts.
+"""
+function split(Z::AbstractZonotope, gens::AbstractVector{Int}, nparts::AbstractVector{Int})
+    return _split(convert(Zonotope, Z), gens, nparts)
 end

@@ -42,4 +42,13 @@ for N in [Float64, Rational{Int}, Float32]
     h = SymmetricIntervalHull(Singleton(N[1, 2]))
     @test high(h) == N[1, 2]
     @test low(h) == N[-1, -2]
+
+    # center
+    @test center(h) == N[0, 0]
+    @test center(h, 1) == zero(N)
+
+    # concretize
+    B = Ball1(N[0, 0], N(1))
+    h = SymmetricIntervalHull(B)
+    @test concretize(h) == symmetric_interval_hull(B)
 end

@@ -15,14 +15,16 @@ element(::ZeroSet{N}) where {N<:Real}
 element(::ZeroSet{N}, ::Int) where {N<:Real}
 linear_map(::AbstractMatrix{N}, ::ZeroSet{N}) where {N<:Real}
 translate(::ZeroSet{N}, ::AbstractVector{N}) where {N<:Real}
+center(::ZeroSet{N}, ::Int) where {N<:Real}
+rectify(Z::ZeroSet)
 ```
 Inherited from [`LazySet`](@ref):
 * [`diameter`](@ref diameter(::LazySet, ::Real))
+* [`singleton_list`](@ref singleton_list(::LazySet))
 
 Inherited from [`AbstractPolytope`](@ref):
 * [`isbounded`](@ref isbounded(::AbstractPolytope))
 * [`isuniversal`](@ref isuniversal(::AbstractPolytope{N}, ::Bool=false) where {N<:Real})
-* [`singleton_list`](@ref singleton_list(::AbstractPolytope{N}) where {N<:Real})
 
 Inherited from [`AbstractCentrallySymmetricPolytope`](@ref):
 * [`isempty`](@ref isempty(::AbstractCentrallySymmetricPolytope))
@@ -42,6 +44,7 @@ Inherited from [`AbstractHyperrectangle`](@ref):
 Inherited from [`AbstractSingleton`](@ref):
 * [`radius_hyperrectangle`](@ref radius_hyperrectangle(::AbstractSingleton{N}) where {N<:Real})
 * [`radius_hyperrectangle`](@ref radius_hyperrectangle(::AbstractSingleton{N}, ::Int) where {N<:Real})
+* [`vertices`](@ref vertices(::AbstractSingleton{N}) where {N})
 * [`vertices_list`](@ref vertices_list(::AbstractSingleton{N}) where {N<:Real})
 * [`center`](@ref center(::AbstractSingleton{N}) where {N<:Real})
 * [`an_element`](@ref an_element(::AbstractSingleton{N}) where {N<:Real})

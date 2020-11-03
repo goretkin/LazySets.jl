@@ -10,7 +10,7 @@ export LazySet,
        radius,
        diameter,
        an_element,
-       isbounded, isbounded_unit_dimensions,
+       isbounded,
        neutral,
        absorbing,
        tosimplehrep,
@@ -24,7 +24,11 @@ export LazySet,
        isequivalent,
        isconvextype,
        area,
-       surface
+       surface,
+       singleton_list,
+       concretize,
+       constraints,
+       vertices
 
 """
     LazySet{N}
@@ -81,7 +85,7 @@ If we only consider *concrete* subtypes, then:
 julia> concrete_subtypes = subtypes(LazySet, true);
 
 julia> length(concrete_subtypes)
-39
+41
 
 julia> println.(concrete_subtypes);
 AffineMap
@@ -99,6 +103,7 @@ Ellipsoid
 EmptySet
 ExponentialMap
 ExponentialProjectionMap
+HParallelotope
 HPolygon
 HPolygonOpt
 HPolyhedron
@@ -109,9 +114,10 @@ Hyperrectangle
 Intersection
 IntersectionArray
 Interval
-Line
+Line2D
 LineSegment
 LinearMap
+Line{N,VN} where VN<:AbstractArray{N,1} where N<:Real
 MinkowskiSum
 MinkowskiSumArray
 ResetMap
@@ -255,7 +261,9 @@ Determine whether a set is bounded.
 
 ### Input
 
-- `S` -- set
+- `S`         -- set
+- `algorithm` -- (optional, default: `"support_function"`) algorithm choice,
+                 possible options are `"support_function"` and `"stiemke"`
 
 ### Output
 
@@ -263,14 +271,21 @@ Determine whether a set is bounded.
 
 ### Algorithm
 
-We check boundedness via [`isbounded_unit_dimensions`](@ref).
+See the documentation of [`_isbounded_unit_dimensions`](@ref) or
+[`_isbounded_stiemke`](@ref) for details.
 """
-function isbounded(S::LazySet)
-    return isbounded_unit_dimensions(S)
+function isbounded(S::LazySet; algorithm="support_function")
+    if algorithm == "support_function"
+        return _isbounded_unit_dimensions(S)
+    elseif algorithm == "stiemke"
+        return _isbounded_stiemke(S)
+    else
+        throw(ArgumentError("unknown algorithm $algorithm"))
+    end
 end
 
 """
-    isbounded_unit_dimensions(S::LazySet{N}) where {N<:Real}
+    _isbounded_unit_dimensions(S::LazySet{N}) where {N<:Real}
 
 Determine whether a set is bounded in each unit dimension.
 
@@ -287,7 +302,7 @@ Determine whether a set is bounded in each unit dimension.
 This function performs ``2n`` support function checks, where ``n`` is the
 ambient dimension of `S`.
 """
-function isbounded_unit_dimensions(S::LazySet{N}) where {N<:Real}
+function _isbounded_unit_dimensions(S::LazySet{N}) where {N<:Real}
     n = dim(S)
     @inbounds for i in 1:n
         for o in [one(N), -one(N)]
@@ -370,7 +385,7 @@ function diameter(S::LazySet, p::Real=Inf)
 end
 
 """
-    affine_map(M::AbstractMatrix, X::LazySet, v::AbstractVector)
+    affine_map(M::AbstractMatrix, X::LazySet, v::AbstractVector; kwargs...)
 
 Compute a concrete affine map.
 
@@ -388,8 +403,8 @@ A set representing the affine map of `X`.
 
 The implementation applies the functions `linear_map` and `translate`.
 """
-function affine_map(M::AbstractMatrix, X::LazySet, v::AbstractVector)
-    return translate(linear_map(M, X), v)
+function affine_map(M::AbstractMatrix, X::LazySet, v::AbstractVector; kwargs...)
+    return translate(linear_map(M, X; kwargs...), v)
 end
 
 """
@@ -681,11 +696,6 @@ Convert a convex set to a pair `(x, y)` of points for plotting.
 
 A pair `(x, y)` of points that can be plotted.
 
-### Notes
-
-Plotting of unbounded sets is not implemented yet (see
-[#576](https://github.com/JuliaReach/LazySets.jl/issues/576)).
-
 ### Algorithm
 
 We first assert that `X` is bounded.
@@ -937,7 +947,8 @@ function area(X::LazySet{N}) where {N}
     @assert dim(X) == 2 "this function only applies to two-dimensional sets, " *
     "but the given set is $(dim(X))-dimensional"
 
-    vlist = vertices_list(X)
+    Xpoly = convert(VPolygon, X)
+    vlist = vertices_list(Xpoly)
     m = length(vlist)
 
     if m <= 2
@@ -982,3 +993,134 @@ function _area_polygon(v::Vector{VN}) where {N, VN<:AbstractVector{N}}
     end
     return abs(res/2)
 end
+
+"""
+    singleton_list(P::LazySet)
+
+Return the vertices of a polytopic set as a list of singletons.
+
+### Input
+
+- `P`                 -- polytopic set
+
+### Output
+
+The list of vertices of `P`, as `Singleton`.
+
+### Notes
+
+This function relies on `vertices_list`, which raises an error if the set is
+not polytopic (e.g., unbounded).
+"""
+function singleton_list(P::LazySet)
+    return [Singleton(x) for x in vertices_list(P)]
+end
+
+"""
+    concretize(X::LazySet)
+
+Construct a concrete representation of a (possibly lazy) set.
+
+### Input
+
+- `X` -- set
+
+### Output
+
+A concrete representation of `X` (as far as possible).
+
+### Notes
+
+Since not every lazy set has a concrete set representation in this library, the
+result may be partially lazy.
+"""
+function concretize(X::LazySet)
+    return X
+end
+
+"""
+    constraints(X::LazySet)
+
+Construct an iterator over the constraints of a polyhedral set.
+
+### Input
+
+- `X` -- polyhedral set
+
+### Output
+
+An iterator over the constraints of `X`.
+"""
+function constraints(X::LazySet)
+    return _constraints_fallback(X)
+end
+
+"""
+    vertices(X::LazySet)
+
+Construct an iterator over the vertices of a polyhedral set.
+
+### Input
+
+- `X` -- polyhedral set
+
+### Output
+
+An iterator over the vertices of `X`.
+"""
+function vertices(X::LazySet)
+    return _vertices_fallback(X)
+end
+
+function _constraints_fallback(X::LazySet)
+    return VectorIterator(constraints_list(X))
+end
+
+function _vertices_fallback(X::LazySet)
+    return VectorIterator(vertices_list(X))
+end
+
+# =========================
+# Code requiring MiniQhull
+# =========================
+
+function load_delaunay_MiniQhull()
+return quote
+
+import .MiniQhull: delaunay
+export delaunay
+
+"""
+    delaunay(X::LazySet)
+
+Compute the Delaunay triangulation of the given convex set.
+
+### Input
+
+- `X` -- set
+
+### Output
+
+A union of polytopes in vertex representation.
+
+### Notes
+
+This function requires that you have properly installed the package
+[MiniQhull.jl](https://github.com/gridap/MiniQhull.jl), including the library
+[Qhull](http://www.qhull.org/).
+
+The method works in arbitrary dimension and the requirement is that the list of
+vertices of `X` can be obtained.
+"""
+function delaunay(X::LazySet)
+    n = dim(X)
+    v = vertices_list(X)
+    m = length(v)
+    coordinates = vcat(v...)
+    connectivity_matrix = delaunay(n, m, coordinates)
+    nelements = size(connectivity_matrix, 2)
+    elements = [VPolytope(v[connectivity_matrix[:, i]]) for i in 1:nelements]
+    return UnionSetArray(elements)
+end
+
+end end  # load_delaunay_MiniQhull

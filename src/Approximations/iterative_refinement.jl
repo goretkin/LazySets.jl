@@ -96,7 +96,7 @@ function new_approx(S::LazySet, p1::VN, d1::VN,
         err = zero(N)
     else
         ndir = normalize([p2[2]-p1[2], p1[1]-p2[1]])
-        q = element(intersection(Line(d1, dot(d1, p1)), Line(d2, dot(d2, p2))))
+        q = element(intersection(Line2D(d1, dot(d1, p1)), Line2D(d2, dot(d2, p2))))
         err = min(norm(q - σ(ndir, S)), dot(ndir, q - p1))
         refinable = (err > _rtol(N)) && (norm(p1-q, 2) > _rtol(N)) &&
                     (norm(q-p2, 2) > _rtol(N))
@@ -184,7 +184,7 @@ function tohrep(Ω::PolygonalOverapproximation)
 end
 
 """
-    approximate(S::LazySet{N}, ε::N) where {N<:AbstractFloat}
+    _approximate(S::LazySet{N}, ε::N) where {N<:AbstractFloat}
 
 Return an ε-close approximation of the given 2D convex set (in terms of
 Hausdorff distance) as an inner and an outer approximation composed by sorted
@@ -199,7 +199,7 @@ local `Approximation2D`.
 
 An ε-close approximation of the given 2D convex set.
 """
-function approximate(S::LazySet{N}, ε::N) where {N<:AbstractFloat}
+function _approximate(S::LazySet{N}, ε::N) where {N<:AbstractFloat}
     # initialize box directions
     pe = σ(DIR_EAST(N), S)
     pn = σ(DIR_NORTH(N), S)

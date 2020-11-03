@@ -114,6 +114,23 @@ isoperationtype(::Type{<:Rectification}) = true
 isconvextype(::Type{<:Rectification}) = false
 
 """
+    set(r::Rectification)
+
+Return the original set of a rectification.
+
+### Input
+
+- `r` -- rectification
+
+### Output
+
+The original set of the rectification.
+"""
+function set(r::Rectification)
+    return r.X
+end
+
+"""
     dim(r::Rectification)
 
 Return the dimension of a rectification.
@@ -569,4 +586,8 @@ function construct_projection(set::LazySet{N}, negative_dimensions,
         end
     end
     return Diagonal(v) * set
+end
+
+function concretize(r::Rectification)
+    return rectify(concretize(r.X))
 end

@@ -19,13 +19,13 @@ constraints_list(::LineSegment{N}) where {N<:Real}
 translate(::LineSegment{N}, ::AbstractVector{N}) where {N<:Real}
 generators(::LineSegment{N}) where {N<:Real}
 genmat(::LineSegment)
-plot_recipe(::LineSegment{N}, ::N=zero(N)) where {N<:Real}
 RecipesBase.apply_recipe(::AbstractDict{Symbol,Any}, ::Union{LineSegment{N}, Interval{N}}, ::N=zero(N)) where {N<:Real}
 ```
 Inherited from [`LazySet`](@ref):
 * [`norm`](@ref norm(::LazySet, ::Real))
 * [`radius`](@ref radius(::LazySet, ::Real))
 * [`diameter`](@ref diameter(::LazySet, ::Real))
+* [`singleton_list`](@ref singleton_list(::LazySet))
 
 Inherited from [`AbstractPolytope`](@ref):
 * [`isbounded`](@ref isbounded(::AbstractPolytope))

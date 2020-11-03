@@ -569,8 +569,10 @@ Concrete projection of a polyhedral set.
 
 ### Output
 
-An `HPolyhedron` representing the projection of `P` on the dimensions specified
-by `block`.
+A polyhedron representing the projection of `P` on the dimensions specified by
+`block`.
+If `P` was bounded, the result is an `HPolytope`; otherwise the result is an
+`HPolyhedron`.
 
 ### Algorithm
 
@@ -600,7 +602,7 @@ julia> constrained_dimensions(P)
 
 julia> P_1234 = project(P, [1, 2, 3, 4]);
 
-julia> P_1234 == convert(HPolyhedron, P)
+julia> P_1234 == convert(HPolytope, P)
 true
 ```
 Each constraint of the cross polytope is constrained in all dimensions.
@@ -641,5 +643,39 @@ function project(P::AbstractPolyhedron{N}, block::AbstractVector{Int}) where {N}
         lm = linear_map(M, P)
         clist = constraints_list(lm)
     end
-    return HPolyhedron(clist)
+    T = isbounded(P) ? HPolytope : HPolyhedron
+    return T(clist)
+end
+
+function project(Z::Zonotope{N}, block::AbstractVector{Int}) where {N}
+    n = dim(Z)
+    M = projection_matrix(block, n, N)
+    lm = remove_zero_generators(linear_map(M, Z))
+    return lm
+end
+
+function project(H::AbstractHyperrectangle, block::AbstractVector{Int})
+    πc = center(H)[block]
+    πr = radius_hyperrectangle(H)[block]
+    return Hyperrectangle(πc, πr, check_bounds=false)
+end
+
+function project(V::Union{<:VPolygon{N}, <:VPolytope{N}},
+                 block::AbstractVector{Int}) where {N}
+    n = dim(V)
+    M = projection_matrix(block, n, N)
+    πvertices = broadcast(v -> M * v, vertices_list(V))
+
+    m = size(M, 1)
+    if m == 1
+        # convex_hull in 1d returns the minimum and maximum points, in that order
+        aux = convex_hull(πvertices)
+        a = first(aux[1])
+        b = length(aux) == 1 ? a : first(aux[2])
+        return Interval(a, b)
+    elseif m == 2
+        return VPolygon(πvertices; apply_convex_hull=true)
+    else
+        return VPolytope(πvertices)
+    end
 end

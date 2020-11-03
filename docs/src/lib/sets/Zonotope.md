@@ -8,25 +8,30 @@ CurrentModule = LazySets
 Zonotope
 center(::Zonotope{N}) where {N<:Real}
 rand(::Type{Zonotope})
-generators(Z::Zonotope)
-genmat(Z::Zonotope)
+generators(::Zonotope)
+genmat(::Zonotope)
 scale(::Real, ::Zonotope)
+scale!(::Real, Z::Zonotope)
 ngens(::Zonotope)
 togrep(::Zonotope)
 reduce_order(::Zonotope, ::Union{Integer, Rational})
-split(::Zonotope, ::Int)
+split(::AbstractZonotope, ::Int)
+split(::AbstractZonotope, ::AbstractVector{Int}, ::AbstractVector{Int})
 remove_zero_generators(::Zonotope)
+linear_map!(::Zonotope, ::AbstractMatrix, ::Zonotope)
+quadratic_map(::Vector{MT}, ::Zonotope{N}) where {N, MT<:AbstractMatrix{N}}
+LazySets._bound_intersect_2D(::Zonotope, ::Line2D)
 ```
 
 Inherited from [`LazySet`](@ref):
 * [`norm`](@ref norm(::LazySet, ::Real))
 * [`radius`](@ref radius(::LazySet, ::Real))
 * [`diameter`](@ref diameter(::LazySet, ::Real))
+* [`singleton_list`](@ref singleton_list(::LazySet))
 
 Inherited from [`AbstractPolytope`](@ref):
 * [`isbounded`](@ref isbounded(::AbstractPolytope))
 * [`isuniversal`](@ref isuniversal(::AbstractPolytope{N}, ::Bool=false) where {N<:Real})
-* [`singleton_list`](@ref singleton_list(::AbstractPolytope{N}) where {N<:Real})
 
 Inherited from [`AbstractCentrallySymmetricPolytope`](@ref):
 * [`dim`](@ref dim(::AbstractCentrallySymmetricPolytope))

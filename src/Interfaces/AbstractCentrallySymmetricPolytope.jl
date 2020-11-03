@@ -3,8 +3,7 @@ import Base.isempty
 export AbstractCentrallySymmetricPolytope,
        center,
        an_element,
-       vertices_list,
-       singleton_list
+       vertices_list
 
 """
     AbstractCentrallySymmetricPolytope{N<:Real} <: AbstractPolytope{N}
@@ -35,6 +34,7 @@ julia> subtypes(AbstractCentrallySymmetricPolytope)
 abstract type AbstractCentrallySymmetricPolytope{N<:Real} <: AbstractPolytope{N} end
 
 isconvextype(::Type{<:AbstractCentrallySymmetricPolytope}) = true
+
 
 # --- common AbstractCentrallySymmetric functions (copy-pasted) ---
 
@@ -87,6 +87,57 @@ Return if a centrally symmetric, polytopic set is empty or not.
 
 `false`.
 """
-function isempty(P::AbstractCentrallySymmetricPolytope)
+function isempty(::AbstractCentrallySymmetricPolytope)
     return false
+end
+
+"""
+    isuniversal(S::AbstractCentrallySymmetricPolytope{N}, [witness]::Bool=false
+               ) where {N<:Real}
+
+Check whether a centrally symmetric polytope is universal.
+
+### Input
+
+- `S`       -- centrally symmetric polytope
+- `witness` -- (optional, default: `false`) compute a witness if activated
+
+### Output
+
+* If `witness` option is deactivated: `false`
+* If `witness` option is activated: `(false, v)` where ``v ∉ S``
+
+### Algorithm
+
+A witness is obtained by computing the support vector in direction
+`d = [1, 0, …, 0]` and adding `d` on top.
+"""
+function isuniversal(S::AbstractCentrallySymmetricPolytope{N},
+                     witness::Bool=false) where {N<:Real}
+    if witness
+        d = SingleEntryVector{N}(1, dim(S))
+        w = σ(d, S) + d
+        return (false, w)
+    else
+        return false
+    end
+end
+
+"""
+    center(H::AbstractCentrallySymmetricPolytope{N}, i::Int) where {N<:Real}
+
+Return the center along a given dimension of a centrally symmetric polytope.
+
+### Input
+
+- `S` -- centrally symmetric polytope
+- `i` -- dimension of interest
+
+### Output
+
+The center along a given dimension of the centrally symmetric polytope.
+"""
+@inline function center(S::AbstractCentrallySymmetricPolytope{N},
+                        i::Int) where {N<:Real}
+    return center(S)[i]
 end

@@ -6,7 +6,8 @@ export constrained_dimensions,
        remove_redundant_constraints!,
        linear_map,
        chebyshev_center,
-       an_element
+       an_element,
+       vertices_list
 
 # default LP solver for floating-point numbers
 function default_lp_solver(N::Type{<:AbstractFloat})
@@ -18,10 +19,18 @@ function default_lp_solver(N::Type{<:Rational})
     GLPKSolverLP(method=:Exact)
 end
 
-# fallback method
+# Polyhedra backend (fallback method)
 function default_polyhedra_backend(P, N)
     require(:Polyhedra; fun_name="default_polyhedra_backend")
     error("no default backend for numeric type $N")
+end
+
+# default LP solver for Polyhedra (fallback method)
+# NOTE: exists in parallel to `default_lp_solver` because we use different
+# interfaces (see #1493)
+function default_lp_solver_polyhedra(N, varargs...)
+    require(:Polyhedra; fun_name="default_lp_solver_polyhedra")
+    error("no default solver for numeric type $N")
 end
 
 """
@@ -47,7 +56,7 @@ function ∈(x::AbstractVector{N}, P::AbstractPolyhedron{N}) where {N<:Real}
         "an element of a $(dim(P))-dimensional set"
 
     for c in constraints_list(P)
-        if dot(c.a, x) > c.b
+        if !_leq(dot(c.a, x), c.b)
             return false
         end
     end
@@ -442,7 +451,7 @@ that was used:
 
 - If the invertibility criterion was used:
 
-    - The types of `HalfSpace`, `Hyperplane`, `Line` and `AbstractHPolygon` are
+    - The types of `HalfSpace`, `Hyperplane`, `Line2D` and `AbstractHPolygon` are
       preserved.
     - If `P` is an `AbstractPolytope`, then the output is an `Interval` if `m = 1`,
       an `HPolygon` if `m = 2` and an `HPolytope` in other cases.
@@ -677,11 +686,23 @@ end
 # preconditions should have been checked in the caller function
 function _linear_map_hrep(M::AbstractMatrix{N}, P::AbstractPolyhedron{N},
                           algo::LinearMapInverse) where {N}
-    inverse = algo.inverse
+    return _linear_map_inverse_hrep(algo.inverse, P)
+end
+
+function linear_map_inverse(Minv::AbstractMatrix{N},
+                            P::AbstractPolyhedron{N}) where {N}
+    @assert size(Minv, 1) == dim(P) "a linear map of size $(size(Minv)) " *
+        "cannot be applied to a set of dimension $(dim(P))"
+    constraints = _linear_map_inverse_hrep(Minv, P)
+    return HPolyhedron(constraints)
+end
+
+function _linear_map_inverse_hrep(Minv::AbstractMatrix{N},
+                                  P::AbstractPolyhedron{N}) where {N}
     constraints_P = constraints_list(P)
     constraints_MP = _preallocate_constraints(constraints_P)
     @inbounds for (i, c) in enumerate(constraints_P)
-        cinv = vec(_At_mul_B(c.a, inverse))
+        cinv = vec(_At_mul_B(c.a, Minv))
         constraints_MP[i] = LinearConstraint(cinv, c.b)
     end
     return constraints_MP
@@ -745,7 +766,8 @@ function _linear_map_hrep(M::AbstractMatrix{N}, P::AbstractPolyhedron{N},
     Phrep = Polyhedra.hrep(y_eq_Mx, Ax_leq_b)
     Phrep = polyhedron(Phrep, backend) # define concrete subtype
     Peli_block = Polyhedra.eliminate(Phrep, (m+1):(m+n), method)
-    Peli_block = Polyhedra.removeduplicates(Polyhedra.hrep(Peli_block))
+    Peli_block = Polyhedra.removeduplicates(Polyhedra.hrep(Peli_block),
+                                            default_lp_solver_polyhedra(N))
 
     # TODO: take constraints directly -- see #1988
     return constraints_list(HPolyhedron(Peli_block))
@@ -793,12 +815,11 @@ function plot_recipe(P::AbstractPolyhedron{N}, ε::N=zero(N)) where {N<:Real}
         end
         x, y = vlist[:, 1], vlist[:, 2]
 
-        if length(x) > 1
+        if length(x) > 2
             # add first vertex to "close" the polygon
             push!(x, x[1])
             push!(y, y[1])
         end
-
         return x, y
     end
 end
@@ -807,7 +828,7 @@ end
     chebyshev_center(P::AbstractPolyhedron{N};
                      [get_radius]::Bool=false,
                      [backend]=default_polyhedra_backend(P, N),
-                     [solver]=JuMP.with_optimizer(GLPK.Optimizer)
+                     [solver]=default_lp_solver_polyhedra(N; presolve=true)
                      ) where {N<:AbstractFloat}
 
 Compute the [Chebyshev center](https://en.wikipedia.org/wiki/Chebyshev_center)
@@ -821,8 +842,9 @@ of a polytope.
                   Chebyshev center
 - `backend`    -- (optional; default: `default_polyhedra_backend(P, N)`) the
                   backend for polyhedral computations
-- `solver`     -- (optional; default: `JuMP.with_optimizer(GLPK.Optimizer)`) the
-                  LP solver passed to `Polyhedra`
+- `solver`     -- (optional; default:
+                  `default_lp_solver_polyhedra(N; presolve=true)`) the LP
+                  solver passed to `Polyhedra`
 
 ### Output
 
@@ -839,7 +861,7 @@ In general, the center of such a ball is not unique (but the radius is).
 function chebyshev_center(P::AbstractPolyhedron{N};
                           get_radius::Bool=false,
                           backend=default_polyhedra_backend(P, N),
-                          solver=JuMP.with_optimizer(GLPK.Optimizer)
+                          solver=default_lp_solver_polyhedra(N; presolve=true)
                          ) where {N<:AbstractFloat}
     require(:Polyhedra; fun_name="chebyshev_center")
     # convert to HPolyhedron to ensure `polyhedron` is applicable (see #1505)
@@ -878,4 +900,74 @@ function an_element(P::AbstractPolyhedron{N}) where {N<:Real}
     end
     e₁ = SingleEntryVector(1, n, one(N))
     return σ(e₁, P)
+end
+
+"""
+    isbounded(P::AbstractPolyhedron{N}; solver=LazySets.default_lp_solver(N)) where {N<:Real}
+
+Determine whether a polyhedron is bounded.
+
+### Input
+
+- `P`       -- polyhedron
+- `backend` -- (optional, default: `default_lp_solver(N)`) the backend used
+               to solve the linear program
+
+### Output
+
+`true` iff the polyhedron is bounded
+
+### Algorithm
+
+We first check if the polyhedron has more than `max(dim(P), 1)` constraints,
+which is a necessary condition for boundedness.
+
+If so, we check boundedness via [`_isbounded_stiemke`](@ref).
+"""
+function isbounded(P::AbstractPolyhedron{N}; solver=LazySets.default_lp_solver(N)) where {N<:Real}
+    constraints = constraints_list(P)
+    if length(constraints) <= max(dim(P), 1)
+        return false
+    end
+    return _isbounded_stiemke(HPolyhedron(constraints), solver=solver)
+end
+
+"""
+    vertices_list(P::AbstractPolyhedron; check_boundedness::Bool=true)
+
+Return the list of vertices of a polyhedron in constraint representation.
+
+### Input
+
+- `P`                 -- polyhedron in constraint representation
+- `check_boundedness` -- (optional, default: `true`) if `true`, check whether the
+                         polyhedron is bounded
+
+### Output
+
+The list of vertices of `P`, or an error if `P` is unbounded.
+
+### Notes
+
+This function returns an error if the polyhedron is unbounded. Otherwise,
+the polyhedron is converted to an `HPolytope` and its list of vertices is computed.
+
+### Examples
+
+```jldoctest
+julia> P = HPolyhedron([HalfSpace([1.0, 0.0], 1.0),
+                        HalfSpace([0.0, 1.0], 1.0),
+                        HalfSpace([-1.0, 0.0], 1.0),
+                        HalfSpace([0.0, -1.0], 1.0)]);
+
+julia> length(vertices_list(P))
+4
+```
+"""
+function vertices_list(P::AbstractPolyhedron; check_boundedness::Bool=true)
+    if check_boundedness && !isbounded(P)
+        throw(ArgumentError("the list of vertices of an unbounded " *
+                            "polyhedron is not defined"))
+    end
+    return vertices_list(HPolytope(constraints_list(P), check_boundedness=false))
 end
